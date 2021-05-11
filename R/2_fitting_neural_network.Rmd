@@ -1,0 +1,176 @@
+---
+title: "NeuralNetwork_Demo"
+author: "Joshua Levy"
+date: "2/25/2021"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# package imports
+```{r}
+library(stringr)
+library(caret)
+library(pROC)
+library(keras)
+library(purrr)
+library(tidyverse)
+```
+
+# comment out when done, compile before running keras
+```{r}
+# devtools::install_github("rstudio/keras") # run this if keras is broken
+# library(keras) # must run
+# install_keras() # need to run to install the neural network backend
+```
+
+# load data
+```{r}
+data<-read.csv("../data/leukemia.csv",header = F)
+```
+
+# generate outcome variable and randomly subselect columns to save compute time since this is a toy example
+- outcome variable is whether leukemia is of lymphoid lineage
+```{r}
+set.seed(42)
+data$Y<-as.factor(sapply(data$V1,function(x){str_detect(x,"ALL")}))
+data<-data[,-1]
+data<-data[,c(sample(1:(ncol(data)-1),size=30),ncol(data))]
+```
+
+# generate train test splits
+```{r}
+set.seed(42)
+train.index <- createDataPartition(data$Y, p = .7, list = FALSE)
+train.data<-data[train.index,]
+test.data<-data[-train.index,]
+```
+
+# train classification neural network
+- series of hidden layers to predict Y from X  
+```{r}
+cv.control <- trainControl(
+    method = "cv",
+    number = 3)
+
+cv.grid <-  expand.grid(size = seq(1, 10, 3),
+                         decay = c(0, 0.2, 0.4))
+
+nnet <- train(Y~., data = train.data, 
+               method = "nnet",
+               linout = F,
+              trace=F,
+              tuneGrid=cv.grid,
+              trainControl=cv.control
+              )
+```
+
+# classification performance on test set
+```{r}
+confusionMatrix(data = predict(nnet,test.data), reference = test.data$Y)
+```
+
+# receiver operating characteristic curve and concordance on test set
+- link to ROC tutorial: https://rpubs.com/Wangzf/pROC
+```{r}
+rocobj <- plot.roc(test.data$Y, predict(nnet,test.data,type="prob")[,2],
+                   main = "ROC Curve Test Set", 
+                   percent=TRUE,
+                   ci = TRUE,                  
+                   print.auc = TRUE)           
+ciobj <- ci.se(rocobj,                         
+               specificities = seq(0, 100, 5)) 
+plot(ciobj, type = "shape", col = "#1c61b6AA")     
+plot(ci(rocobj, of = "thresholds", thresholds = "best")) 
+```
+
+# generate autoencoder for unsupervised dimensionality reduction
+- autoencoder is comprised of:  
+  - an encoder, which projects the data, X -> Z  
+  - a decoder, which reconstructs the original data, Z -> X
+  
+# generate encoder network
+```{r}
+encoder.input <- layer_input(ncol(data)-1)
+encoder.output<- encoder.input %>% 
+  layer_dense(units=32, activation = "relu") %>% 
+  layer_activation_leaky_relu() %>% 
+  layer_dropout(0.2) %>% 
+  layer_dense(units=2) %>% 
+  layer_activation_leaky_relu()
+encoder<-keras_model(encoder.input,encoder.output)
+```
+
+# generate decoder network
+```{r}
+decoder.input <- layer_input(2)
+decoder.output<- decoder.input %>% 
+  layer_dense(units=32, activation = "relu") %>% 
+  layer_activation_leaky_relu() %>% 
+  layer_dropout(0.2) %>% 
+  layer_dense(units = ncol(data)-1) 
+decoder<-keras_model(decoder.input,decoder.output)
+```
+
+# link encoder and decoder together to form autoencoder
+```{r}
+autoencoder.input<-layer_input(ncol(data)-1)
+autoencoder.output<- autoencoder.input %>% 
+  encoder() %>% 
+  decoder()
+autoencoder<-keras_model(autoencoder.input,autoencoder.output)
+summary(autoencoder)
+```
+
+# simpler autoencoder design
+- uses different activation function
+- note layer that outputs 2-dimensions, that is our target space to reduce to
+```{r}
+autoencoder.simple <- keras_model_sequential() %>% 
+  layer_dense(units = 15, activation = "tanh", input_shape = c(1,ncol(data)-1)) %>%
+  layer_dense(units = 2, activation = "tanh") %>%
+  layer_dense(units = 15, activation = "tanh") %>%
+  layer_dense(units = ncol(data)-1)
+summary(autoencoder.simple)
+```
+
+# Fit model ("overfit" on all data just for demonstration)
+- Reduce number of epochs to lower training time
+```{r}
+set.seed(42)
+n.epochs<-600
+batch.size<-32
+autoencoder %>% compile(optimizer="adam", loss=loss_mean_squared_error)
+autoencoder %>% fit(x=data.matrix(data[,-ncol(data)]),y=data.matrix(data[,-ncol(data)]), epochs=n.epochs, batch_size=batch.size)
+```
+
+# use fitted encoder to embed all data
+```{r}
+encoder.new<-keras_model(inputs = autoencoder.simple$input,
+                                    outputs = get_layer(autoencoder.simple,index=2)$output )
+Z<-predict(encoder,data.matrix(data[,-ncol(data)]))
+```
+
+# plot autoencoder embedding
+```{r}
+t.data<-as.data.frame(Z)
+colnames(t.data)<-c("x","y")
+t.data$ALL<-data$Y
+ggplot(t.data,aes(x=x,y=y,col=ALL)) +
+  geom_point()
+```
+# compare embeddings to PCA
+```{r}
+set.seed(42)
+pca<-prcomp(t(data[,-ncol(data)]))
+
+t.data.pca<-as.data.frame(pca$rotation[,1:2])
+colnames(t.data.pca)<-c("x","y")
+t.data.pca$ALL<-data$Y
+ggplot(t.data.pca,aes(x=x,y=y,col=ALL)) +
+  geom_point()
+
+```
+

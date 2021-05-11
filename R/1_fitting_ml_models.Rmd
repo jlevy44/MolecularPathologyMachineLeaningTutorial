@@ -1,0 +1,157 @@
+---
+title: "NeuralNetwork_Demo"
+author: "Joshua Levy"
+date: "2/25/2021"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# package imports
+```{r}
+library(stringr)
+library(caret)
+library(pROC)
+library(purrr)
+library(tidyverse)
+library(EMCluster)
+library(cluster)
+library(MASS)
+```
+
+# load data
+```{r}
+data<-read.csv("../data/leukemia.csv",header = F)
+```
+
+# generate outcome variable and randomly subselect columns to save compute time since this is a toy example
+- outcome variable is whether leukemia is of lymphoid lineage
+```{r}
+set.seed(42)
+data$Y<-as.factor(make.names(as.numeric(sapply(data$V1,function(x){str_detect(x,"ALL")}))))
+data<-data[,-1]
+data<-data[,c(sample(1:(ncol(data)-1),size=30),ncol(data))]
+```
+
+# generate train test splits
+```{r}
+set.seed(42)
+train.index <- createDataPartition(data$Y, p = .7, list = FALSE)
+train.data<-data[train.index,]
+test.data<-data[-train.index,]
+```
+
+# train classification random forest
+- 3-fold cross validation within training set (successive partitions of training set to select ideal hyperparameters)
+```{r}
+cvIndex <- createFolds(train.data$Y, 3, returnTrain = T)
+
+cv.control <- trainControl(
+    index=cvIndex,
+    method = "cv",
+    number = 3)
+
+
+cv.grid <-  expand.grid(.mtry= as.integer(c(5,10,sqrt(ncol(data)-1))))
+
+set.seed(42)
+rf <- train(Y~., data = train.data, 
+               method = "rf",
+               linout = F,
+              trace=F,
+              tuneGrid=cv.grid,
+              trControl=cv.control,
+              allowParallel=F,
+              ntree=1000
+              )
+```
+
+# classification performance on test set
+```{r}
+confusionMatrix(data = predict(rf,test.data), reference = test.data$Y)
+```
+
+# receiver operating characteristic curve and concordance on test set
+- link to ROC tutorial: https://rpubs.com/Wangzf/pROC
+```{r}
+rocobj <- plot.roc(test.data$Y, predict(rf,test.data,type="prob")[,2],
+                   main = "ROC Curve Test Set", 
+                   percent=TRUE,
+                   ci = TRUE,                  
+                   print.auc = TRUE)           
+ciobj <- ci.se(rocobj,                         
+               specificities = seq(0, 100, 5)) 
+plot(ciobj, type = "shape", col = "#1c61b6AA")     
+plot(ci(rocobj, of = "thresholds", thresholds = "best")) 
+```
+
+# train classification SVM
+```{r}
+cvIndex <- createFolds(factor(train.data$Y), 3, returnTrain = T)
+
+cv.control <- trainControl(
+    index=cvIndex,
+    method = "cv",
+    number = 3,
+    classProbs =  TRUE)
+
+set.seed(42)
+svm <- train(Y~., data = train.data, 
+               method = "svmRadial",
+               linout = F,
+              trace=F,
+              trControl=cv.control,
+              allowParallel=F,
+              preProcess = c("center","scale"),
+              metric="ROC"
+              )
+
+confusionMatrix(data = predict(svm,test.data), reference = test.data$Y)
+
+rocobj <- plot.roc(test.data$Y, predict(svm,test.data,type="prob")[,2],
+                   main = "ROC Curve Test Set", 
+                   percent=TRUE,
+                   ci = TRUE,                  
+                   print.auc = TRUE)           
+ciobj <- ci.se(rocobj,                         
+               specificities = seq(0, 100, 5)) 
+plot(ciobj, type = "shape", col = "#1c61b6AA")     
+plot(ci(rocobj, of = "thresholds", thresholds = "best")) 
+```
+
+# Unsupervised Learning
+- Run PCA, then cluster
+  
+# PCA
+```{r}
+set.seed(42)
+pca<-prcomp(t(data[,-ncol(data)]))
+
+t.data.pca<-as.data.frame(pca$rotation[,1:2])
+colnames(t.data.pca)<-c("x","y")
+t.data.pca$ALL<-data$Y
+ggplot(t.data.pca,aes(x=x,y=y,col=ALL)) +
+  geom_point()
+
+```
+
+# Fit a KMeans Clustering Model
+```{r}
+cl.object<-kmeans(t.data.pca[,1:2],2)
+t.data.pca$cl<-as.character(cl.object$cluster)
+ggplot(t.data.pca,aes(x=x,y=y,col=cl)) +
+  geom_point()
+```
+
+
+# Fit a Gaussian Mixture Model
+```{r}
+set.seed(42)
+gaussian.mixture<-em.EM(t.data.pca[,1:2],nclass=2, min.n = 10)
+t.data.pca$cl2<-as.character(assign.class(t.data.pca[,1:2], gaussian.mixture)$class)
+ggplot(t.data.pca,aes(x=x,y=y,col=cl2)) +
+  geom_point()
+```
+
