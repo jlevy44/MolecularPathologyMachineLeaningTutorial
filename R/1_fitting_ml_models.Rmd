@@ -46,6 +46,8 @@ test.data<-data[-train.index,]
 # train classification random forest
 - 3-fold cross validation within training set (successive partitions of training set to select ideal hyperparameters)
 ```{r}
+set.seed(42)
+
 cvIndex <- createFolds(train.data$Y, 3, returnTrain = T)
 
 cv.control <- trainControl(
@@ -53,10 +55,9 @@ cv.control <- trainControl(
     method = "cv",
     number = 3)
 
-
 cv.grid <-  expand.grid(.mtry= as.integer(c(5,10,sqrt(ncol(data)-1))))
 
-set.seed(42)
+
 rf <- train(Y~., data = train.data, 
                method = "rf",
                linout = F,
@@ -70,7 +71,8 @@ rf <- train(Y~., data = train.data,
 
 # classification performance on test set
 ```{r}
-confusionMatrix(data = predict(rf,test.data), reference = test.data$Y)
+y.pred<-predict(rf,test.data)
+confusionMatrix(data = y.pred, reference = test.data$Y)
 ```
 
 # receiver operating characteristic curve and concordance on test set

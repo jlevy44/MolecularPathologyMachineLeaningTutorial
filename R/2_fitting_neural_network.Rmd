@@ -35,7 +35,7 @@ data<-read.csv("../data/leukemia.csv",header = F)
 - outcome variable is whether leukemia is of lymphoid lineage
 ```{r}
 set.seed(42)
-data$Y<-as.factor(sapply(data$V1,function(x){str_detect(x,"ALL")}))
+data$Y<-as.factor(str_detect(data$V1,"ALL"))
 data<-data[,-1]
 data<-data[,c(sample(1:(ncol(data)-1),size=30),ncol(data))]
 ```
