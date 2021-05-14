@@ -16,9 +16,13 @@ library(caret)
 library(pROC)
 library(purrr)
 library(tidyverse)
+library(ClusterR)
 library(EMCluster)
 library(cluster)
 library(MASS)
+library(pheatmap)
+library(ggpubr)
+
 ```
 
 # load data
@@ -129,13 +133,13 @@ plot(ci(rocobj, of = "thresholds", thresholds = "best"))
 # PCA
 ```{r}
 set.seed(42)
-pca<-prcomp(t(data[,-ncol(data)]))
+pca<-prcomp(data[,-ncol(data)])
 
-t.data.pca<-as.data.frame(pca$rotation[,1:2])
+t.data.pca<-as.data.frame(pca$x[,1:2])
 colnames(t.data.pca)<-c("x","y")
 t.data.pca$ALL<-data$Y
 ggplot(t.data.pca,aes(x=x,y=y,col=ALL)) +
-  geom_point()
+  geom_point() + theme_classic2()
 
 ```
 
@@ -144,16 +148,28 @@ ggplot(t.data.pca,aes(x=x,y=y,col=ALL)) +
 cl.object<-kmeans(t.data.pca[,1:2],2)
 t.data.pca$cl<-as.character(cl.object$cluster)
 ggplot(t.data.pca,aes(x=x,y=y,col=cl)) +
-  geom_point()
+  geom_point() + theme_classic2()
 ```
 
 
 # Fit a Gaussian Mixture Model
 ```{r}
 set.seed(42)
+
+# package 1 for mixture model estimation
 gaussian.mixture<-em.EM(t.data.pca[,1:2],nclass=2, min.n = 10)
 t.data.pca$cl2<-as.character(assign.class(t.data.pca[,1:2], gaussian.mixture)$class)
+
+# package 2 for mixture model estimation
+gmm<-GMM(t.data.pca[,1:2],2,seed=42)
+t.data.pca$cl2<-as.character(apply(gmm$Log_likelihood,1,function(x) which(x==max(x))))
+
 ggplot(t.data.pca,aes(x=x,y=y,col=cl2)) +
   geom_point()
+```
+
+# Hierarchical Clustering
+```{r}
+pheatmap(data[,-ncol(data)])
 ```
 

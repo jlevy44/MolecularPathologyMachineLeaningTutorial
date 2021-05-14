@@ -159,7 +159,7 @@ t.data<-as.data.frame(Z)
 colnames(t.data)<-c("x","y")
 t.data$ALL<-data$Y
 ggplot(t.data,aes(x=x,y=y,col=ALL)) +
-  geom_point()
+  geom_point() + theme_classic2()
 ```
 # compare embeddings to PCA
 ```{r}
