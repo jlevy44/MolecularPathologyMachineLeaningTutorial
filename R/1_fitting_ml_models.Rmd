@@ -37,6 +37,9 @@ set.seed(42)
 data$Y<-as.factor(make.names(as.numeric(sapply(data$V1,function(x){str_detect(x,"ALL")}))))
 data<-data[,-1]
 data<-data[,c(sample(1:(ncol(data)-1),size=30),ncol(data))]
+
+# alternative labelling scheme
+# data$Y<-as.factor(make.names(sapply(data$V1,function(x){ifelse(str_detect(x,"ALL"),"ALL","AML")})))
 ```
 
 # generate train test splits
@@ -146,7 +149,7 @@ ggplot(t.data.pca,aes(x=x,y=y,col=ALL)) +
 # Fit a KMeans Clustering Model
 ```{r}
 cl.object<-kmeans(t.data.pca[,1:2],2)
-t.data.pca$cl<-as.character(cl.object$cluster)
+t.data.pca$cl<-as.character(2-cl.object$cluster)
 ggplot(t.data.pca,aes(x=x,y=y,col=cl)) +
   geom_point() + theme_classic2()
 ```
