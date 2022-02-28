@@ -23,7 +23,32 @@ library(tidyverse)
 ```{r}
 # devtools::install_github("rstudio/keras") # run this if keras is broken
 # library(keras) # must run
-# install_keras() # need to run to install the neural network backend
+# need to run to install the neural network backend
+# install_keras() # installs keras to virtual environment
+```
+
+# using anaconda for keras
+- comment out parts that you don't need
+```{r}
+# parsing bug fix for earlier version of reticulate, can ignore
+# conda_version<-function (conda = "auto") 
+# {
+#     conda_bin <- reticulate:::conda_binary(conda)
+#     system2(conda_bin, "--version", stdout = TRUE,stderr=T)
+# }
+# rlang::env_unlock(env = asNamespace('reticulate'))
+# rlang::env_binding_unlock(env = asNamespace('reticulate'))
+# assign('conda_version', conda_version, envir = asNamespace('reticulate'))
+# rlang::env_binding_lock(env = asNamespace("reticulate"))
+# rlang::env_lock(asNamespace('reticulate'))
+
+# reticulate, create keras environment
+# reticulate::conda_create("keras",python_version = "3.7")
+
+# load keras from keras-named conda environment if using anaconda
+# keras::use_condaenv("keras", conda = "/anaconda2/bin/conda", required = TRUE)
+
+# install_keras(method="conda",conda="/anaconda2/condabin/conda",envname="keras") # installs keras to anaconda environment keras, if available
 ```
 
 # load data
@@ -90,7 +115,7 @@ plot(ci(rocobj, of = "thresholds", thresholds = "best"))
 - autoencoder is comprised of:  
   - an encoder, which projects the data, X -> Z  
   - a decoder, which reconstructs the original data, Z -> X
-  
+
 # generate encoder network
 ```{r}
 encoder.input <- layer_input(ncol(data)-1)
@@ -159,7 +184,7 @@ t.data<-as.data.frame(Z)
 colnames(t.data)<-c("x","y")
 t.data$ALL<-data$Y
 ggplot(t.data,aes(x=x,y=y,col=ALL)) +
-  geom_point() + theme_classic2()
+  geom_point() + theme_classic()
 ```
 # compare embeddings to PCA
 ```{r}
@@ -170,7 +195,7 @@ t.data.pca<-as.data.frame(pca$rotation[,1:2])
 colnames(t.data.pca)<-c("x","y")
 t.data.pca$ALL<-data$Y
 ggplot(t.data.pca,aes(x=x,y=y,col=ALL)) +
-  geom_point()
+  geom_point() + theme_classic()
 
 ```
 
